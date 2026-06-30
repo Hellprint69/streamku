@@ -1,34 +1,41 @@
 "use client"
-import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+export const runtime = 'edge';
 
-const SB_URL = "https://fzqdniqalrderusvvfre.supabase.co"
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6cWRuaXFhbHJkZXJ1c3Z2ZnJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzNDk0MjMsImV4cCI6MjA5MzkyNTQyM30.xvMMaTl730ER9vDWiwrFklPliuDkc2PkwikEgH5nn3w"
-const supabase = createClient(SB_URL, SB_KEY)
+import { useEffect, useState } from 'react'
 
 export default function Home() {
   const [videos, setVideos] = useState([])
   const [featured, setFeatured] = useState([])
   const [filteredVideos, setFilteredVideos] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchVideos()
   }, [])
 
   const fetchVideos = async () => {
-    const { data } = await supabase.from('videos').select('*').order('id', { ascending: false })
-    if (data) {
-      setVideos(data)
-      setFilteredVideos(data)
-      // Ambil 4 video terbaru untuk jadi "Populer/Featured"
-      setFeatured(data.slice(0, 4))
+    try {
+      // Memanggil API internal kita yang terhubung ke D1
+      const response = await fetch('/api/videos')
+      const data = await response.json()
+      
+      if (Array.isArray(data)) {
+        setVideos(data)
+        setFilteredVideos(data)
+        // Ambil 4 video terbaru untuk jadi "Populer/Featured"
+        setFeatured(data.slice(0, 4))
+      }
+    } catch (error) {
+      console.error("Gagal mengambil data video:", error)
+    } finally {
+      setLoading(false)
     }
   }
 
   useEffect(() => {
     const hasil = videos.filter(v => 
-      v.title.toLowerCase().includes(searchTerm.toLowerCase())
+      v.title && v.title.toLowerCase().includes(searchTerm.toLowerCase())
     )
     setFilteredVideos(hasil)
   }, [searchTerm, videos])
@@ -47,40 +54,50 @@ export default function Home() {
         <input placeholder="Cari film..." onChange={(e) => setSearchTerm(e.target.value)} style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 15px', borderRadius: '25px', width: '120px', outline: 'none', fontSize: '0.8rem' }} />
       </nav>
 
-      {/* SECTION POPULER (FEATURED) */}
-      {!searchTerm && featured.length > 0 && (
-        <div style={{ paddingTop: '80px', paddingBottom: '20px' }}>
-          <h3 style={{ paddingLeft: '5%', marginBottom: '15px', color: '#E50914', fontSize: '1rem', letterSpacing: '1px' }}>SEDANG POPULER</h3>
-          <div style={{ display: 'flex', overflowX: 'auto', gap: '15px', padding: '0 5%', scrollbarWidth: 'none' }}>
-            {featured.map((f) => (
-              <a href={`/watch/${f.id}`} key={f.id} style={{ textDecoration: 'none', flex: '0 0 280px', position: 'relative' }}>
-                <div style={{ width: '100%', paddingTop: '56.25%', borderRadius: '12px', overflow: 'hidden', background: '#111', border: '1px solid #222' }}>
-                   <img src={`https://images.weserv.nl/?url=${encodeURIComponent(f.thumbnail)}&w=600`} style={{ position: 'absolute', top: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: '0.7' }} />
-                   <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', padding: '15px', background: 'linear-gradient(to top, rgba(0,0,0,1), transparent)', boxSizing: 'border-box' }}>
-                      <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 'bold', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.title}</p>
-                      <span style={{ fontSize: '0.65rem', color: '#E50914', fontWeight: 'bold' }}>BARU DITAMBAHKAN</span>
-                   </div>
-                </div>
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* SEMUA FILM */}
-      <div style={{ padding: searchTerm ? '100px 5% 40px' : '20px 5% 40px' }}>
-        <h3 style={{ marginBottom: '15px', fontSize: '1rem', color: '#fff' }}>{searchTerm ? 'HASIL PENCARIAN' : 'SEMUA FILM'}</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>
-          {filteredVideos.map((vid) => (
-            <a href={`/watch/${vid.id}`} key={vid.id} style={{ textDecoration: 'none', color: 'inherit' }}>
-              <div style={{ position: 'relative', paddingTop: '150%', borderRadius: '8px', overflow: 'hidden', background: '#111', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-                <img src={`https://images.weserv.nl/?url=${encodeURIComponent(vid.thumbnail)}&w=300`} referrerPolicy="no-referrer" style={{ position: 'absolute', top: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+      {loading ? (
+        <div style={{ paddingTop: '150px', textAlign: 'center', color: '#888' }}>Memuat database film...</div>
+      ) : (
+        <>
+          {/* SECTION POPULER (FEATURED) */}
+          {!searchTerm && featured.length > 0 && (
+            <div style={{ paddingTop: '80px', paddingBottom: '20px' }}>
+              <h3 style={{ paddingLeft: '5%', marginBottom: '15px', color: '#E50914', fontSize: '1rem', letterSpacing: '1px' }}>SEDANG POPULER</h3>
+              <div style={{ display: 'flex', overflowX: 'auto', gap: '15px', padding: '0 5%', scrollbarWidth: 'none' }}>
+                {featured.map((f) => (
+                  <a href={`/watch/${f.id}`} key={f.id} style={{ textDecoration: 'none', flex: '0 0 280px', position: 'relative' }}>
+                    <div style={{ width: '100%', paddingTop: '56.25%', borderRadius: '12px', overflow: 'hidden', background: '#111', border: '1px solid #222' }}>
+                       {f.thumbnail && <img src={`https://images.weserv.nl/?url=${encodeURIComponent(f.thumbnail)}&w=600`} style={{ position: 'absolute', top: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: '0.7' }} />}
+                       <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', padding: '15px', background: 'linear-gradient(to top, rgba(0,0,0,1), transparent)', boxSizing: 'border-box' }}>
+                          <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 'bold', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.title}</p>
+                          <span style={{ fontSize: '0.65rem', color: '#E50914', fontWeight: 'bold' }}>BARU DITAMBAHKAN</span>
+                       </div>
+                    </div>
+                  </a>
+                ))}
               </div>
-              <p style={{ fontSize: '0.75rem', marginTop: '8px', color: '#bbb', height: '2.4em', overflow: 'hidden' }}>{vid.title}</p>
-            </a>
-          ))}
-        </div>
-      </div>
+            </div>
+          )}
+
+          {/* SEMUA FILM */}
+          <div style={{ padding: searchTerm ? '100px 5% 40px' : '20px 5% 40px' }}>
+            <h3 style={{ marginBottom: '15px', fontSize: '1rem', color: '#fff' }}>{searchTerm ? 'HASIL PENCARIAN' : 'SEMUA FILM'}</h3>
+            {filteredVideos.length === 0 ? (
+              <div style={{ color: '#555', fontSize: '0.9rem', marginTop: '20px' }}>Tidak ada film ditemukan.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '15px' }}>
+                {filteredVideos.map((vid) => (
+                  <a href={`/watch/${vid.id}`} key={vid.id} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{ position: 'relative', paddingTop: '150%', borderRadius: '8px', overflow: 'hidden', background: '#111', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+                      {vid.thumbnail && <img src={`https://images.weserv.nl/?url=${encodeURIComponent(vid.thumbnail)}&w=300`} referrerPolicy="no-referrer" style={{ position: 'absolute', top: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+                    </div>
+                    <p style={{ fontSize: '0.75rem', marginTop: '8px', color: '#bbb', height: '2.4em', overflow: 'hidden' }}>{vid.title}</p>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <footer style={{ padding: '40px', textAlign: 'center', color: '#333', fontSize: '0.7rem' }}>
         © 2026 STREAMINGKU - PREMIUM INTERFACE
